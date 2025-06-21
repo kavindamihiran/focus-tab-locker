@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Focus Tab Locker",
+  "version": "1.0",
+  "description": "Stay on one tab and avoid switching during focus mode.",
+  "permissions": ["tabs", "scripting", "storage"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Toggle Focus Mode"
+  }
+}
+
