@@ -17,7 +17,7 @@ chrome.action.onClicked.addListener(async (tab) => {
 
 chrome.tabs.onActivated.addListener((activeInfo) => {
   if (focusMode && activeInfo.tabId !== lockedTabId) {
-    chrome.tabs.update(lockedTabId, { active: true });
+    attemptRefocus();
   }
 });
 
@@ -27,3 +27,16 @@ chrome.tabs.onCreated.addListener((tab) => {
   }
 });
 
+// 🔁 Refocus with retry logic
+function attemptRefocus(retries = 5) {
+  if (!focusMode || !lockedTabId) return;
+
+  chrome.tabs.update(lockedTabId, { active: true }).catch((err) => {
+    if (retries > 0) {
+      console.warn("Refocus failed, retrying...", err);
+      setTimeout(() => attemptRefocus(retries - 1), 500); // retry in 0.5 sec
+    } else {
+      console.error("Failed to refocus after multiple attempts:", err);
+    }
+  });
+}
