@@ -5,6 +5,11 @@
   "description": "Stay focused by locking into one tab. Prevents tab switching and new tabs.",
   "permissions": ["tabs", "scripting", "storage"],
   "host_permissions": ["<all_urls>"],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "background": {
     "service_worker": "background.js"
   },
@@ -15,6 +20,10 @@
     }
   ],
   "action": {
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png"
+    },
     "default_title": "Toggle Focus Mode"
   }
 }
