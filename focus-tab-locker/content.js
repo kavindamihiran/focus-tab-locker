@@ -1,17 +1,28 @@
 let blocker = null;
 let currentTabId = null;
+let isInitialized = false;
 
 // Get current tab ID once
 chrome.runtime.sendMessage({ action: "getCurrentTabId" }, (tabId) => {
+  if (chrome.runtime.lastError) {
+    console.log("Error getting tab ID:", chrome.runtime.lastError.message);
+    return;
+  }
   currentTabId = tabId;
+  isInitialized = true;
   checkAndApplyBlocker();
 });
 
 function checkAndApplyBlocker() {
+  // Don't apply blocker until we have a valid tab ID
+  if (!isInitialized || currentTabId === null) {
+    return;
+  }
+  
   chrome.storage.local.get(
     ["focusMode", "lockedTabId"],
     ({ focusMode, lockedTabId }) => {
-      if (focusMode && currentTabId !== lockedTabId) {
+      if (focusMode && lockedTabId && currentTabId !== lockedTabId) {
         showBlocker();
       } else {
         hideBlocker();
