@@ -1,12 +1,20 @@
 let focusMode = false;
 let lockedTabId = null;
+let lockedTabUrl = null;
 
 // Helper function to check if a URL is accessible by the extension
 function isAccessibleUrl(url) {
   if (!url) return false;
   // Block chrome://, edge://, about:, and other restricted protocols
-  const restrictedProtocols = ['chrome://', 'chrome-extension://', 'edge://', 'about:', 'view-source:', 'devtools://'];
-  return !restrictedProtocols.some(protocol => url.startsWith(protocol));
+  const restrictedProtocols = [
+    "chrome://",
+    "chrome-extension://",
+    "edge://",
+    "about:",
+    "view-source:",
+    "devtools://",
+  ];
+  return !restrictedProtocols.some((protocol) => url.startsWith(protocol));
 }
 
 chrome.runtime.onStartup.addListener(() => {
@@ -17,34 +25,49 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 async function restoreFocusState() {
-  const { focusMode: storedMode, lockedTabId: storedTab } = await chrome.storage.local.get(["focusMode", "lockedTabId"]);
-  if (storedMode && storedTab) {
-    enableFocusMode(storedTab);
+  const { focusMode: storedMode, lockedTabUrl: storedUrl } =
+    await chrome.storage.local.get(["focusMode", "lockedTabUrl"]);
+  if (storedMode && storedUrl) {
+    // Find the tab with the stored URL (tab IDs change on restart)
+    const tabs = await chrome.tabs.query({});
+    const matchingTab = tabs.find((tab) => tab.url === storedUrl);
+    if (matchingTab) {
+      enableFocusMode(matchingTab.id, matchingTab.url);
+    } else {
+      // If tab doesn't exist anymore, disable focus mode
+      disableFocusMode();
+    }
   }
 }
 
 chrome.action.onClicked.addListener(async (tab) => {
   focusMode = !focusMode;
   if (focusMode) {
-    enableFocusMode(tab.id);
+    enableFocusMode(tab.id, tab.url);
   } else {
     disableFocusMode();
   }
 });
 
-function enableFocusMode(tabId) {
+async function enableFocusMode(tabId, url) {
   focusMode = true;
   lockedTabId = tabId;
+  lockedTabUrl = url;
   chrome.action.setBadgeText({ text: "🔒" });
-  chrome.storage.local.set({ focusMode: true, lockedTabId });
+  chrome.storage.local.set({ focusMode: true, lockedTabId, lockedTabUrl: url });
   exitFullscreen(tabId);
 }
 
 function disableFocusMode() {
   focusMode = false;
   lockedTabId = null;
+  lockedTabUrl = null;
   chrome.action.setBadgeText({ text: "" });
-  chrome.storage.local.set({ focusMode: false, lockedTabId: null });
+  chrome.storage.local.set({
+    focusMode: false,
+    lockedTabId: null,
+    lockedTabUrl: null,
+  });
 }
 
 function attemptRefocus(retries = 5) {
@@ -79,14 +102,14 @@ async function exitFullscreen(tabId) {
       console.log("Cannot execute script on restricted URL:", tab.url);
       return;
     }
-    
+
     await chrome.scripting.executeScript({
       target: { tabId: tabId },
       func: () => {
         if (document.fullscreenElement) {
           document.exitFullscreen();
         }
-      }
+      },
     });
   } catch (err) {
     console.log("Could not exit fullscreen:", err.message);
@@ -95,6 +118,13 @@ async function exitFullscreen(tabId) {
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === "getCurrentTabId") {
-    sendResponse(sender.tab.id);
+    // Ensure sender.tab exists before accessing its id
+    if (sender.tab && sender.tab.id) {
+      sendResponse(sender.tab.id);
+    } else {
+      console.log("No tab information available for sender");
+      sendResponse(null);
+    }
+    return true; // Keep the message channel open for async response
   }
 });
