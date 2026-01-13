@@ -6,8 +6,15 @@ let lockedTabUrl = null;
 function isAccessibleUrl(url) {
   if (!url) return false;
   // Block chrome://, edge://, about:, and other restricted protocols
-  const restrictedProtocols = ['chrome://', 'chrome-extension://', 'edge://', 'about:', 'view-source:', 'devtools://'];
-  return !restrictedProtocols.some(protocol => url.startsWith(protocol));
+  const restrictedProtocols = [
+    "chrome://",
+    "chrome-extension://",
+    "edge://",
+    "about:",
+    "view-source:",
+    "devtools://",
+  ];
+  return !restrictedProtocols.some((protocol) => url.startsWith(protocol));
 }
 
 chrome.runtime.onStartup.addListener(() => {
@@ -18,11 +25,12 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 async function restoreFocusState() {
-  const { focusMode: storedMode, lockedTabUrl: storedUrl } = await chrome.storage.local.get(["focusMode", "lockedTabUrl"]);
+  const { focusMode: storedMode, lockedTabUrl: storedUrl } =
+    await chrome.storage.local.get(["focusMode", "lockedTabUrl"]);
   if (storedMode && storedUrl) {
     // Find the tab with the stored URL (tab IDs change on restart)
     const tabs = await chrome.tabs.query({});
-    const matchingTab = tabs.find(tab => tab.url === storedUrl);
+    const matchingTab = tabs.find((tab) => tab.url === storedUrl);
     if (matchingTab) {
       enableFocusMode(matchingTab.id, matchingTab.url);
     } else {
@@ -55,7 +63,11 @@ function disableFocusMode() {
   lockedTabId = null;
   lockedTabUrl = null;
   chrome.action.setBadgeText({ text: "" });
-  chrome.storage.local.set({ focusMode: false, lockedTabId: null, lockedTabUrl: null });
+  chrome.storage.local.set({
+    focusMode: false,
+    lockedTabId: null,
+    lockedTabUrl: null,
+  });
 }
 
 function attemptRefocus(retries = 5) {
@@ -90,14 +102,14 @@ async function exitFullscreen(tabId) {
       console.log("Cannot execute script on restricted URL:", tab.url);
       return;
     }
-    
+
     await chrome.scripting.executeScript({
       target: { tabId: tabId },
       func: () => {
         if (document.fullscreenElement) {
           document.exitFullscreen();
         }
-      }
+      },
     });
   } catch (err) {
     console.log("Could not exit fullscreen:", err.message);
