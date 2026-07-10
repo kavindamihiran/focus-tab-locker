@@ -5,8 +5,10 @@ A simple Chrome extension that helps you **stay focused** by locking you into yo
 ## 🚀 Features
 
 - Lock yourself to a single tab
-- Automatically block switching to other tabs
-- Instantly close any newly opened tabs
+- Show a 3-second warning before returning from another tab
+- Move the focus lock to the attempted tab during the countdown
+- Clearly show active focus mode with a red lock icon
+- Automatically clear focus mode when the locked tab or window closes
 - Keep your other tabs untouched for later
 
 ---
@@ -30,8 +32,9 @@ A simple Chrome extension that helps you **stay focused** by locking you into yo
 - Open the tab you want to focus on
 - Click the extension icon to **lock** focus 🔒
 - You will now:
-  - Be prevented from switching tabs
-  - Have any new tabs auto-closed
+  - Get a 3-second countdown when you switch tabs
+  - Return automatically to the locked tab after the countdown
+  - Be able to choose **Use this tab instead** to move the lock
 - Click the icon again to **unlock** 🔓
 
 ---

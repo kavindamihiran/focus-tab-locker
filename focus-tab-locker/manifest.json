@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Focus Tab Locker",
-  "version": "1.4",
-  "description": "Stay focused by locking into one tab. Prevents tab switching and new tabs.",
+  "version": "2.0",
+  "description": "Stay focused by locking into one tab, with a safe countdown before returning.",
   "permissions": ["scripting", "storage"],
   "host_permissions": ["<all_urls>"],
   "icons": {
