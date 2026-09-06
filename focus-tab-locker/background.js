@@ -5,12 +5,18 @@ const DEFAULT_ICONS = {
 };
 
 const SWITCH_DELAY_MS = 3000;
+const PAUSE_END_ALARM = "focusPauseEnd";
+const PAUSE_TICK_ALARM = "focusPauseTick";
+const MAX_PAUSE_MINUTES = 480;
 
 let focusMode = false;
 let lockedTabId = null;
 let lockedTabUrl = null;
 let pendingSwitch = null;
 let switchSequence = 0;
+let pauseUntil = 0;
+let pausedTabId = null;
+const pausePillTabs = new Set();
 
 const stateReady = restoreFocusState();
 
@@ -78,12 +84,31 @@ function createActiveIcon(size) {
   return context.getImageData(0, 0, size, size);
 }
 
+function isPaused() {
+  return focusMode && pauseUntil > Date.now();
+}
+
+function pauseBadgeText() {
+  const remaining = pauseUntil - Date.now();
+  if (remaining <= 0) return "";
+  if (remaining < 60000) return `${Math.ceil(remaining / 1000)}s`;
+  return `${Math.ceil(remaining / 60000)}m`;
+}
+
 async function setToolbarState(active, countdown = "") {
-  const title = active
-    ? countdown
+  const paused = active && isPaused();
+  const badge = paused ? pauseBadgeText() : countdown;
+
+  let title = "Lock this tab for focus";
+  if (paused) {
+    title = `Focus lock paused — ${badge} left (click to turn it off)`;
+  } else if (active) {
+    title = countdown
       ? `Returning to the locked tab in ${countdown}…`
-      : "Focus mode active — click to unlock"
-    : "Lock this tab for focus";
+      : "Focus mode active — click to unlock";
+  }
+
+  const badgeColor = paused ? "#d97706" : "#dc2626";
 
   try {
     if (active) {
@@ -98,14 +123,14 @@ async function setToolbarState(active, countdown = "") {
 
     await Promise.all([
       chrome.action.setTitle({ title }),
-      chrome.action.setBadgeBackgroundColor({ color: "#dc2626" }),
-      chrome.action.setBadgeText({ text: countdown }),
+      chrome.action.setBadgeBackgroundColor({ color: badgeColor }),
+      chrome.action.setBadgeText({ text: badge }),
     ]);
   } catch (error) {
     // A red badge is a safe fallback on browsers without OffscreenCanvas support.
     console.log("Could not update the toolbar icon:", error.message);
-    await chrome.action.setBadgeBackgroundColor({ color: "#dc2626" });
-    await chrome.action.setBadgeText({ text: countdown || (active ? "●" : "") });
+    await chrome.action.setBadgeBackgroundColor({ color: badgeColor });
+    await chrome.action.setBadgeText({ text: badge || (active ? "●" : "") });
   }
 }
 
@@ -114,11 +139,20 @@ async function restoreFocusState() {
     "focusMode",
     "lockedTabId",
     "lockedTabUrl",
+    "pauseUntil",
+    "pausedTabId",
   ]);
 
   if (!stored.focusMode) {
+    await clearPauseState();
     await setToolbarState(false);
     return;
+  }
+
+  pauseUntil = Number(stored.pauseUntil) || 0;
+  pausedTabId = stored.pausedTabId ?? null;
+  if (pausedTabId !== null && pauseUntil > Date.now()) {
+    pausePillTabs.add(pausedTabId);
   }
 
   let lockedTab = stored.lockedTabId
@@ -153,6 +187,12 @@ async function restoreFocusState() {
     lockedTabId,
     lockedTabUrl,
   });
+
+  if (pauseUntil > Date.now()) {
+    await schedulePauseAlarms();
+  } else {
+    await clearPauseState();
+  }
   await setToolbarState(true);
 }
 
@@ -161,6 +201,7 @@ async function enableFocusMode(tabId, url) {
   if (!tab) return false;
 
   cancelPendingSwitch(false);
+  await clearPauseState();
   focusMode = true;
   lockedTabId = tabId;
   lockedTabUrl = url || tab.url || null;
@@ -177,6 +218,7 @@ async function enableFocusMode(tabId, url) {
 
 async function disableFocusMode() {
   cancelPendingSwitch(false);
+  await clearPauseState();
   focusMode = false;
   lockedTabId = null;
   lockedTabUrl = null;
@@ -187,6 +229,97 @@ async function disableFocusMode() {
     lockedTabUrl: null,
   });
   await setToolbarState(false);
+}
+
+async function schedulePauseAlarms() {
+  await chrome.alarms.clear(PAUSE_END_ALARM);
+  await chrome.alarms.clear(PAUSE_TICK_ALARM);
+  await chrome.alarms.create(PAUSE_END_ALARM, { when: pauseUntil });
+  // The service worker can be suspended, so the badge is refreshed on a tick.
+  await chrome.alarms.create(PAUSE_TICK_ALARM, { periodInMinutes: 1 });
+}
+
+async function clearPauseState() {
+  const shownOn = [...pausePillTabs];
+  pausePillTabs.clear();
+  pauseUntil = 0;
+  pausedTabId = null;
+
+  await chrome.storage.local.set({ pauseUntil: 0, pausedTabId: null });
+  await chrome.alarms.clear(PAUSE_END_ALARM);
+  await chrome.alarms.clear(PAUSE_TICK_ALARM);
+
+  for (const tabId of shownOn) hidePauseOnTab(tabId);
+}
+
+// Pausing keeps the locked tab remembered but stops sending the user back to it.
+async function pauseFocusMode(minutes, tabId) {
+  if (!focusMode) return 0;
+
+  cancelPendingSwitch(false);
+  pauseUntil = Date.now() + minutes * 60000;
+  pausedTabId = tabId ?? null;
+
+  if (pausedTabId !== null) pausePillTabs.add(pausedTabId);
+
+  await chrome.storage.local.set({ pauseUntil, pausedTabId });
+  await schedulePauseAlarms();
+  await setToolbarState(true);
+  return pauseUntil;
+}
+
+async function resumeFocusMode() {
+  await clearPauseState();
+  if (!focusMode) return;
+
+  await setToolbarState(true);
+
+  const [active] = await chrome.tabs.query({
+    active: true,
+    lastFocusedWindow: true,
+  });
+  if (active?.id && active.id !== lockedTabId) {
+    beginPendingSwitch(active.id, active.windowId);
+  }
+}
+
+// The remaining pause time follows the user to whichever tab they open next.
+async function showPauseOnTab(tabId, until) {
+  const message = { action: "showFocusPause", until };
+
+  try {
+    const response = await chrome.tabs.sendMessage(tabId, message);
+    if (response?.handled) {
+      pausePillTabs.add(tabId);
+      return;
+    }
+  } catch (_error) {
+    // Inject the current content script below when no receiver is available.
+  }
+
+  const tab = await getTab(tabId);
+  if (!tab || !isAccessibleUrl(tab.url)) return;
+
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["content.js"],
+    });
+
+    if (!isPaused()) return;
+    await chrome.tabs.sendMessage(tabId, message);
+    pausePillTabs.add(tabId);
+  } catch (error) {
+    console.log("Could not show the pause timer on this page:", error.message);
+  }
+}
+
+async function hidePauseOnTab(tabId) {
+  try {
+    await chrome.tabs.sendMessage(tabId, { action: "hideFocusPause" });
+  } catch (_error) {
+    // Restricted and unloaded pages do not have a content script.
+  }
 }
 
 function clearPendingTimers(pending) {
@@ -246,35 +379,62 @@ async function hideCountdownOnTab(tabId) {
   }
 }
 
-function beginPendingSwitch(tabId, windowId) {
-  cancelPendingSwitch(false);
-
-  const token = ++switchSequence;
-  const deadline = Date.now() + SWITCH_DELAY_MS;
-  pendingSwitch = {
-    token,
-    tabId,
-    windowId,
-    deadline,
-    badgeTimers: [],
-    returnTimer: null,
-  };
+function armPendingSwitch() {
+  const { token } = pendingSwitch;
+  pendingSwitch.held = false;
+  pendingSwitch.deadline = Date.now() + SWITCH_DELAY_MS;
 
   setToolbarState(true, "3");
-  showCountdownOnTab(tabId, token, deadline);
-
-  pendingSwitch.badgeTimers.push(
+  pendingSwitch.badgeTimers = [
     setTimeout(() => {
       if (pendingSwitch?.token === token) setToolbarState(true, "2");
     }, 1000),
     setTimeout(() => {
       if (pendingSwitch?.token === token) setToolbarState(true, "1");
-    }, 2000)
-  );
+    }, 2000),
+  ];
   pendingSwitch.returnTimer = setTimeout(
     () => returnToLockedTab(token),
     SWITCH_DELAY_MS
   );
+  return pendingSwitch.deadline;
+}
+
+function beginPendingSwitch(tabId, windowId) {
+  cancelPendingSwitch(false);
+
+  const token = ++switchSequence;
+  pendingSwitch = {
+    token,
+    tabId,
+    windowId,
+    deadline: 0,
+    held: false,
+    badgeTimers: [],
+    returnTimer: null,
+  };
+
+  const deadline = armPendingSwitch();
+  showCountdownOnTab(tabId, token, deadline);
+}
+
+// Freezing the countdown gives the user time to pick a pause length without
+// being pulled back to the locked tab mid-choice.
+function holdPendingSwitch(tabId) {
+  if (!pendingSwitch || pendingSwitch.tabId !== tabId) return false;
+  if (pendingSwitch.held) return true;
+
+  clearPendingTimers(pendingSwitch);
+  pendingSwitch.held = true;
+  pendingSwitch.badgeTimers = [];
+  pendingSwitch.returnTimer = null;
+  setToolbarState(true, "||");
+  return true;
+}
+
+function releasePendingSwitch(tabId) {
+  if (!pendingSwitch?.held || pendingSwitch.tabId !== tabId) return 0;
+  return armPendingSwitch();
 }
 
 async function returnToLockedTab(token) {
@@ -331,6 +491,11 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
     return;
   }
 
+  if (isPaused()) {
+    showPauseOnTab(activeInfo.tabId, pauseUntil);
+    return;
+  }
+
   beginPendingSwitch(activeInfo.tabId, activeInfo.windowId);
 });
 
@@ -338,6 +503,8 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   await stateReady;
 
   if (pendingSwitch?.tabId === tabId) cancelPendingSwitch();
+  pausePillTabs.delete(tabId);
+  if (pausedTabId === tabId) pausedTabId = null;
   if (focusMode && tabId === lockedTabId) await disableFocusMode();
 });
 
@@ -361,27 +528,91 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
   await chrome.storage.local.set({ lockedTabUrl });
 });
 
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name !== PAUSE_END_ALARM && alarm.name !== PAUSE_TICK_ALARM) return;
+
+  await stateReady;
+  if (isPaused()) {
+    await setToolbarState(true);
+    return;
+  }
+  await resumeFocusMode();
+});
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action !== "unlockAttemptedTab") return false;
+  const handled = [
+    "unlockAttemptedTab",
+    "disableFocusLock",
+    "pauseFocusLock",
+    "resumeFocusLock",
+    "holdFocusCountdown",
+    "resumeFocusCountdown",
+  ].includes(message.action);
+  if (!handled) return false;
 
   (async () => {
     await stateReady;
-    const senderTab = sender.tab;
-    const isCurrentAttempt =
-      focusMode &&
-      senderTab?.id &&
-      pendingSwitch?.tabId === senderTab.id &&
-      Date.now() < pendingSwitch.deadline;
+    const senderTabId = sender.tab?.id ?? null;
 
-    if (!isCurrentAttempt) {
-      sendResponse({ ok: false });
+    // The overlay only ever asks about the tab it is drawn on.
+    const isLiveAttempt =
+      focusMode &&
+      senderTabId !== null &&
+      pendingSwitch?.tabId === senderTabId &&
+      (pendingSwitch.held || Date.now() < pendingSwitch.deadline);
+
+    if (message.action === "unlockAttemptedTab") {
+      if (!isLiveAttempt) {
+        sendResponse({ ok: false });
+        return;
+      }
+      const changed = await enableFocusMode(senderTabId, sender.tab.url);
+      sendResponse({ ok: changed });
       return;
     }
 
-    const changed = await enableFocusMode(senderTab.id, senderTab.url);
-    sendResponse({ ok: changed });
+    if (message.action === "holdFocusCountdown") {
+      sendResponse({ ok: holdPendingSwitch(senderTabId) });
+      return;
+    }
+
+    if (message.action === "resumeFocusCountdown") {
+      const deadline = releasePendingSwitch(senderTabId);
+      sendResponse({ ok: deadline > 0, deadline });
+      return;
+    }
+
+    if (message.action === "disableFocusLock") {
+      if (!focusMode) {
+        sendResponse({ ok: true });
+        return;
+      }
+      await disableFocusMode();
+      sendResponse({ ok: true });
+      return;
+    }
+
+    if (message.action === "pauseFocusLock") {
+      const minutes = Math.round(Number(message.minutes));
+      if (!focusMode || !Number.isFinite(minutes) || minutes < 1) {
+        sendResponse({ ok: false });
+        return;
+      }
+
+      const until = await pauseFocusMode(
+        Math.min(minutes, MAX_PAUSE_MINUTES),
+        senderTabId
+      );
+      sendResponse({ ok: until > 0, until });
+      return;
+    }
+
+    if (message.action === "resumeFocusLock") {
+      await resumeFocusMode();
+      sendResponse({ ok: true });
+    }
   })().catch((error) => {
-    console.log("Could not change the locked tab:", error.message);
+    console.log("Could not handle the focus lock request:", error.message);
     sendResponse({ ok: false });
   });
 

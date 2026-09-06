@@ -1,10 +1,16 @@
 {
   "manifest_version": 3,
   "name": "Focus Tab Locker",
-  "version": "2.0",
-  "description": "Stay focused by locking into one tab, with a safe countdown before returning.",
-  "permissions": ["scripting", "storage"],
-  "host_permissions": ["<all_urls>"],
+  "version": "2.1",
+  "description": "Stay focused by locking into one tab, with a safe countdown and quick pause controls.",
+  "permissions": [
+    "scripting",
+    "storage",
+    "alarms"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -15,8 +21,12 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"]
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ]
     }
   ],
   "action": {
