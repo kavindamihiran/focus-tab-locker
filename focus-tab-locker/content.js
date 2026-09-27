@@ -317,8 +317,8 @@
         <h1>Returning to your focused tab</h1>
         <p>This tab will stay open.</p>
         <div class="countdown" aria-live="assertive"></div>
-        <button type="button" class="primary" data-role="switch">Use this tab instead</button>
-        <div class="hint">This replaces your current focused tab.</div>
+        <button type="button" class="primary" data-role="switch">Return to locked tab</button>
+        <div class="hint">Your current focused tab stays locked.</div>
 
         <div class="divider">Need this tab now?</div>
         <div class="quick">
@@ -378,7 +378,7 @@
 
     function idle() {
       for (const button of card.querySelectorAll("button")) button.disabled = false;
-      switchButton.textContent = "Use this tab instead";
+      switchButton.textContent = "Return to locked tab";
     }
 
     // Freezing the return countdown keeps the tab from switching away while the
@@ -415,8 +415,8 @@
     }
 
     switchButton.addEventListener("click", async () => {
-      busy("Switching focus lock…");
-      const response = await send({ action: "unlockAttemptedTab" });
+      busy("Returning to locked tab…");
+      const response = await send({ action: "returnToLockedTab" });
       if (!response?.ok) {
         idle();
         return;

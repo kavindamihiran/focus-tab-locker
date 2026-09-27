@@ -38,7 +38,7 @@ A simple Chrome extension that helps you **stay focused** by locking you into yo
 - You will now:
   - Get a 3-second countdown when you switch tabs
   - Return automatically to the locked tab after the countdown
-  - Be able to choose **Use this tab instead** to move the lock
+  - Be able to choose **Return to locked tab** to return immediately while keeping the same tab locked
 - Need this tab right now? Use the small buttons under the countdown:
   - **Turn off** — switch the focus lock off completely
   - **Pause 5 min** — suspend the lock for five minutes

@@ -23,7 +23,7 @@ There is nothing to build, lint, or test — the source is loaded directly:
 4. Bump `manifest.json`'s `version` for anything released to the store.
 
 Verification is manual: lock a tab, switch away, and exercise the countdown,
-"Use this tab instead", "Turn off", and the pause paths — including a browser
+"Return to locked tab", "Turn off", and the pause paths — including a browser
 restart (state restore) and a locked tab that gets closed.
 
 ## Architecture
@@ -80,13 +80,13 @@ pill) are host elements with **closed shadow roots** and `all: initial`, at
 persistent state of its own and re-renders from whatever `deadline`/`until`
 timestamp the background sends.
 
-Messages content → background: `unlockAttemptedTab`, `disableFocusLock`,
+Messages content → background: `returnToLockedTab`, `disableFocusLock`,
 `pauseFocusLock`, `resumeFocusLock`, `holdFocusCountdown`,
 `resumeFocusCountdown`. Background → content: `showFocusCountdown`,
 `hideFocusCountdown`, `showFocusPause`, `hideFocusPause` (each answered with
 `{handled: true}`, which is how the background detects a live receiver).
 
-The background never trusts the sender: `unlockAttemptedTab` is only honored when
+The background never trusts the sender: `returnToLockedTab` is only honored when
 the sender tab is the one with a live `pendingSwitch`, and `pauseFocusLock`
 minutes are clamped to `MAX_PAUSE_MINUTES` (480). `MAX_PAUSE_MINUTES` is defined
 in both files and must stay in sync.

@@ -541,7 +541,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const handled = [
-    "unlockAttemptedTab",
+    "returnToLockedTab",
     "disableFocusLock",
     "pauseFocusLock",
     "resumeFocusLock",
@@ -561,13 +561,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       pendingSwitch?.tabId === senderTabId &&
       (pendingSwitch.held || Date.now() < pendingSwitch.deadline);
 
-    if (message.action === "unlockAttemptedTab") {
+    if (message.action === "returnToLockedTab") {
       if (!isLiveAttempt) {
         sendResponse({ ok: false });
         return;
       }
-      const changed = await enableFocusMode(senderTabId, sender.tab.url);
-      sendResponse({ ok: changed });
+      await returnToLockedTab(pendingSwitch.token);
+      sendResponse({ ok: true });
       return;
     }
 
