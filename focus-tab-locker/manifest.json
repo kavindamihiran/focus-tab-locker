@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Focus Tab Locker",
-  "version": "2.1",
+  "version": "2.2",
   "description": "Stay focused by locking into one tab, with a safe countdown and quick pause controls.",
   "permissions": [
     "scripting",
