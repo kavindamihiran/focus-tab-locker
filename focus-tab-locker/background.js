@@ -218,10 +218,12 @@ async function enableFocusMode(tabId, url) {
 
 async function disableFocusMode() {
   cancelPendingSwitch(false);
-  await clearPauseState();
+  // Turn the lock off before the first await: closing the locked tab also
+  // activates another tab, and that onActivated must not start a countdown.
   focusMode = false;
   lockedTabId = null;
   lockedTabUrl = null;
+  await clearPauseState();
 
   await chrome.storage.local.set({
     focusMode: false,
@@ -401,6 +403,8 @@ function armPendingSwitch() {
 }
 
 function beginPendingSwitch(tabId, windowId) {
+  // resumeFocusMode() gets here after awaits, so re-check the lock state.
+  if (!focusMode || isPaused()) return;
   cancelPendingSwitch(false);
 
   const token = ++switchSequence;

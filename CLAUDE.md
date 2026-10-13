@@ -58,6 +58,11 @@ Key mechanisms:
   `pendingSwitch?.token === token` before acting — this is how stale callbacks
   from a superseded switch are discarded. The countdown can be *held* (frozen)
   while the user picks a pause duration, then re-armed by `armPendingSwitch()`.
+  Invariant: a pending switch exists only while the lock is on. Listeners
+  interleave at every `await`, so `disableFocusMode()` turns the lock off
+  *before* its first `await` (closing the locked tab fires `onActivated` for
+  the next tab mid-disable), and `beginPendingSwitch()` refuses to start while
+  the lock is off or paused.
 - **Pause**: pausing keeps the lock remembered but stops the return-to-tab
   behavior. `pausePillTabs` tracks which tabs are currently showing the pause
   pill so they can all be cleaned up in `clearPauseState()`.
