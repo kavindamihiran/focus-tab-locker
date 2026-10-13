@@ -3,6 +3,8 @@
   "name": "Focus Tab Locker",
   "version": "2.2",
   "description": "Stay focused by locking into one tab, with a safe countdown and quick pause controls.",
+  "homepage_url": "https://github.com/kavindamihiran/focus-tab-locker",
+  "minimum_chrome_version": "99",
   "permissions": [
     "scripting",
     "storage",
@@ -13,25 +15,17 @@
   ],
   "icons": {
     "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
   "background": {
     "service_worker": "background.js"
   },
-  "content_scripts": [
-    {
-      "matches": [
-        "<all_urls>"
-      ],
-      "js": [
-        "content.js"
-      ]
-    }
-  ],
   "action": {
     "default_icon": {
       "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
       "48": "icons/icon48.png"
     },
     "default_title": "Toggle Focus Mode"

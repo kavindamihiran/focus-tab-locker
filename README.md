@@ -56,4 +56,21 @@ A simple Chrome extension that helps you **stay focused** by locking you into yo
 
 ---
 
+## 🔐 Permissions
+
+| Permission | Why it's needed |
+| --- | --- |
+| Access to all websites (`<all_urls>`) | You can switch to any site, so the extension needs access to every site to show the countdown and pause timer there. It only draws its own overlay and never reads page content. |
+| `scripting` | Adds the countdown and pause timer to the tab you switch to, and exits fullscreen on the tab you lock. |
+| `storage` | Remembers the locked tab and any pause on your device, so the lock survives a browser restart. |
+| `alarms` | Ends a pause on time and keeps the pause timer on the toolbar up to date. |
+
+---
+
+## 🛡️ Privacy
+
+Focus Tab Locker makes no network requests and collects no data. It saves only the lock state, including the locked tab's address, on your device, and clears the address when you turn the lock off. See the full [privacy policy](PRIVACY.md).
+
+---
+
 Stay focused. Crush distractions. 🧠✨
